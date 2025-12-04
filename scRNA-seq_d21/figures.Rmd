@@ -1,0 +1,405 @@
+---
+title: "Scripts for figures from d21 single-cell RNA-seq"
+
+
+##script for data processing and analyzes are in "processing.Rmd" file, all home-made functions are in the "functions.Rmd"
+---
+
+LIBRARIES
+```{r}
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(svglite)
+library(dittoSeq)
+library(scCustomize)
+library(cowplot)
+```
+
+
+#### --------------------
+#### ------ DAY 21 ------
+#### --------------------
+#---------------------------------------------
+# complete d21 dataset: w/ proliferating
+#---------------------------------------------
+```{r}
+#read SO 
+gpx2.sc.d21 <- readRDS("gpx2_sc_d21.RDS")
+```
+
+Supplementary Figure 6a-b - general QC
+```{r fig.width = 16}
+
+features = c('mitoPercent', 'nCount_RNA', 'nFeature_RNA')
+colors = dittoSeq::dittoColors()[1:20]
+vln_mito <- VlnPlot(gpx2.sc.d21, cols = colors, pt.size = 0, group.by = "Genotype", features = features[1], raster = T)  
+vln_nCount_RNA <- VlnPlot(gpx2.sc.d21, cols = colors, pt.size = 0, group.by = "Genotype", features = features[2], raster = T) 
+vln_nFeat_RNA <- VlnPlot(gpx2.sc.d21, cols = colors, pt.size = 0, group.by = "Genotype", features = features[3], raster = T) 
+feat_nCountvsnFeat_RNA <- FeatureScatter(gpx2.sc.d21, cols = colors, pt.size = 1.5, feature1 = "nCount_RNA", feature2 = "nFeature_RNA", group.by = "Genotype")
+
+vln_mito | vln_nCount_RNA | vln_nFeat_RNA + feat_nCountvsnFeat_RNA
+
+
+svglite::svglite("Figs/SupplFig6a-b_general_vln_QC.svg", width = 12, height = 3, pointsize = 10, fix_text_size = F)
+vln_mito | vln_nCount_RNA | vln_nFeat_RNA | feat_nCountvsnFeat_RNA
+dev.off()
+```
+
+Supplementary Figure 6c - UMAP genotypes
+```{r fig.width = 16}
+
+figS6c <- DimPlot(gpx2.sc.d21, cols = dittoSeq::dittoColors(), reduction = "umap", group.by = "Genotype")
+figS6c
+
+svglite::svglite("Figs/SupplFig6c_general_umap_genotypes.svg", width = 5, height = 4, pointsize = 10, fix_text_size = F)
+figS6c
+dev.off()
+```
+
+COLORS
+```{r}
+#colors for clusters
+d21_colors = c('SC-B' = "magenta2", 'MultiH' = 'lightslateblue', 'EC' = 'lightpink1', 'D' = "chocolate1", 'EP'= "khaki", 'PP2' ="palegreen1", 'PP1'="seagreen", 'MLP'="steelblue1", 'ML'="coral1", "PP_prolif"="wheat2", "MLP_prolif"="cyan1", "Mes"="azure4")
+```
+
+Supplementary Figure 6e_left - UMAP clusters
+```{r}
+
+figS6e <- DimPlot(gpx2.sc.d21, group.by = "clusters", cols = d21_colors)
+figS6e
+
+svglite::svglite("Figs/SupplFig6e_general_umap_clusters.svg", width = 5.5, height = 4, pointsize = 10, fix_text_size = F)
+figS6e
+dev.off()
+```
+
+Supplementary Figure 6e_right - barplot of frequencies
+```{r}
+figS6e_r <- dittoSeq::dittoBarPlot(
+    object = gpx2.sc.d21,
+    var = "clusters",
+    color.panel = d21_colors,
+    group.by = "Genotype",
+    retain.factor.levels = T)
+figS6e_r
+
+
+svglite::svglite("Figs/SupplFig6e_general_ditto_ClxGen.svg", width = 3, height = 4, pointsize = 10, fix_text_size = F)
+figS6e_r
+dev.off()
+
+table(gpx2.sc.d21$CLvsGNTP) #numbers within each cluster-genotype for counting frequencies
+
+```
+
+#---------------------------------------------
+# d21 dataset subset: w/o proliferating
+#---------------------------------------------
+
+```{r}
+#read SO 
+gpx2.sc.d21.nP <- readRDS("gpx2_sc_d21_nP.RDS")
+```
+
+Figure 4d - UMAP genotypes
+```{r fig.width = 8}
+
+fig4d <- DimPlot(gpx2.sc.d21.nP, cols = dittoSeq::dittoColors(), reduction = "umap", group.by = "Genotype")
+fig4d
+svglite::svglite("Figs/Fig4d_general_umap_genotypes.svg", width = 5, height = 4, pointsize = 10, fix_text_size = F)
+fig4d
+dev.off()
+```
+
+COLORS
+```{r}
+d21_nP_colors = c('SC-B' = "magenta2", 'MH' = 'lightslateblue', 'EC' = 'lightpink1', 'D' = "chocolate1", 'EP'= "khaki", 'PP2' ="palegreen1", 'PP1'="seagreen", 'MLP1'="steelblue1", 'MLP2'="thistle2", 'ML'="coral1")
+```
+
+Figure 4e - UMAP clusters split by Genotype
+```{r}
+fig4e <- DimPlot(gpx2.sc.d21.nP, group.by = "clusters", cols = d21_nP_colors, split.by = "Genotype", label = T) &
+  labs(x = "UMAP_1", y = "UMAP_2")
+fig4e
+
+svglite::svglite("Figs/Fig4e_general_umap_clusters_splitGntp.svg", width = 7, height = 4, pointsize = 10, fix_text_size = F)
+fig4e
+dev.off()
+```
+
+Figure 4f - ditto bar plot of cluster frequencies within each genotype
+```{r}
+fig4f <- dittoSeq::dittoBarPlot(
+    object = gpx2.sc.d21.nP,
+    var = "clusters",
+    group.by = "Genotype",
+    color.panel = d21_nP_colors, 
+    retain.factor.levels = T)
+
+fig4f
+
+svglite::svglite("Figs/Fig4f_general_barplot_clusters_splitGntp.svg", width = 2.2, height = 3, pointsize = 10, fix_text_size = F)
+fig4f
+dev.off()
+
+fig4f
+table(gpx2.sc.d21.nP$CLvsGNTP) #numbers within each cluster-genotype for counting frequencies
+```
+
+Supplementary Figure 6f - Feature plots with markers expression
+```{r}
+figS6f <- FeaturePlot(gpx2.sc.d21.nP, features = c("INS", "GCG", "PYY", "ARX", "SST", "ISL1", "CHGA", "LMX1A", "FEV", "NEUROG3", "PDX1", "SOX2", "HNF4A", "RUNX1", "EPHA7", "AFP", "CDX2", "FGB"), ncol = 6)
+figS5f
+
+svglite::svglite("Figs/SupplFig6f_general_FeaturePlot_markers.svg", width = 15, height = 5, pointsize = 10, fix_text_size = F)
+figS6f
+dev.off()
+
+```
+
+Figure 4g - lineage markers for common clusters
+```{r}
+genes_common <- c("CPE", "ISL1", "NEUROD1", "NKX2-2", "NKX6-1", "PAX6", "INS", "GPC6", "MAFB", "PDX1", "GCG", "ARX", "PYY", "PPY", "NEUROG3", "HES6", "RFX3", "RFX6", "FEV", "CHGA", "LMX1A", "TPH1", "SST")
+
+fig4g <- DotPlot(subset(gpx2.sc.d21.nP, subset = clusters %in% c("EP", "EC", "D", "MH", "SC-B")),  features = genes_common, group.by = "CLvsGNTP") + RotatedAxis() + scale_colour_gradient2(low = "blue", mid = "white", high = "red")
+
+fig4g
+
+svglite::svglite("Figs/Fig4g_dotplot_markers_common_CLvsGNTP.svg", width = 7.8, height = 3.2, pointsize = 7, fix_text_size = F)
+fig4g
+dev.off()
+```
+
+Figure 4h - plot DEGs for common clusters
+```{r}
+#load and prepare DEG table (Supplementary Data 3)
+DE.d21.gtXcl <- read.csv("SupplData3_1.csv")
+
+DEGs <- DE.d21.gtXcl %>% 
+  filter(abs(log_fc) >= 1, padj < 0.05) %>%
+  select(feature, log_fc, padj, group1) %>%
+  tidyr::separate(group1, c("cluster", "genotype"), sep = "_") %>% 
+  select(-genotype) %>%
+  dplyr::rename(log2FC = log_fc) %>%
+  mutate(direction = case_when(log2FC >= 1 ~ "up",
+                               log2FC <= -1 ~ "down",
+                               TRUE ~ "ns")) 
+
+DEGs %>% group_by(cluster, direction) %>% summarise(number = n())
+
+
+fig4h <- ggplot(data = DEGs, aes(x = cluster, y = log2FC, color = -log10(padj))) +
+     geom_hline(yintercept = c(-1, 1), linetype = "dashed") +
+     geom_jitter(width = 0.25) +
+     scale_y_continuous(breaks = c(-5, -2, -1, 0, 1, 2, 5)) +
+     scale_color_gradient(low="blue", high="red") +
+     theme_minimal() +
+     coord_flip()
+    
+fig4h
+
+svglite::svglite("Figs/Fig4h_scatter_DEGs_genotypes.svg", width = 7.8, height = 3.2, pointsize = 7, fix_text_size = F)
+fig4h
+dev.off()
+```
+
+Supplementary Figure 6g - barplot for normalized frequencies of genotypes per cluster
+```{r}
+figS6g <- dittoBarPlot_norm(SO = gpx2.sc.d21.nP, var = "Genotype", group.by = "clusters")[2] #function from functions.Rmd
+
+figS6g
+
+svglite::svglite("Figs/SupplFig6g_general_barplot_frequencies.svg", width = 6, height = 3, scaling = 2, fix_text_size = F) 
+figS6g
+dev.off()
+```
+
+
+Figures 4i and 4k - FeaturePlot - pseudotime - split by Genotypes
+```{r}
+fig4ik <- FeaturePlot(gpx2.sc.d21.nP, split.by = "Genotype", features = "pseudotime", label = T, cols=c("gray", "red")) &
+  labs(x = "UMAP_1", y = "UMAP_2") & 
+  theme(legend.position = c(0.1,0.2))
+fFig4ik
+
+svglite::svglite("Figs/Fig4ik_pseudotime_splitGntp.svg", width = 8, height = 4, pointsize = 10, fix_text_size = F)
+fig4ik
+dev.off()
+```
+
+Figures 4j - plot clusters along pseudotime - WT
+```{r}
+data.4j <- gpx2.sc.d21.nP[[c("Genotype", "clusters", "pseudotime")]] %>% filter(Genotype == "WT", clusters != "MLP1")
+
+fig4j <- ggplot(data.4j, aes(pseudotime, clusters, fill = clusters)) + 
+    geom_violin(scale = "width", draw_quantiles = "0.5") +
+    scale_y_discrete(limits=rev) + 
+    scale_fill_manual(values = d21_nP_colors)
+
+svglite::svglite("Figs/Fig4j_violin_pseudotime_WT.svg", width = 5.5, height = 2.7, pointsize = 12, fix_text_size = F)
+fig4j
+dev.off()
+
+Fig4j
+```
+
+Figures 4l - plot clusters along pseudotime - KO
+```{r}
+data.4l <- gpx2.sc.d21.nP[[c("Genotype", "clusters", "pseudotime")]] %>% filter(Genotype == "KO", clusters != "PP1")
+
+fig4l <- ggplot(data.4l, aes(pseudotime, clusters, fill = clusters)) + 
+    geom_violin(scale = "width", draw_quantiles = "0.5") +
+    scale_y_discrete(limits=rev) + 
+    scale_fill_manual(values = d21_nP_colors)
+
+svglite::svglite("Figs/Fig4l_violin_pseudotime_KO.svg", width = 5.5, height = 3.3, pointsize = 12, fix_text_size = F)
+fig4l
+dev.off()
+
+Fig4l
+```
+
+Figure 4m - plot organ lineage markers for genotype-specific clusters
+```{r}
+genes_separate <- c("SOX2", "ANXA2", "ANXA4", "KRT18", "RUNX1", "SOX9", "DCDC2", "SPINK1", "EPHA7", "SERPINA1", "HNF4A", "AFP", "APOB", "AMN", "APOA1", "FGA", "FGB", "FGG", "TBX3", "HNF1B", "SOX17", "ANXA13", "CDH17", "CDX2", "YAP1")
+
+fig4m <- DotPlot(subset(gpx2.sc.d21.nP, subset = CLvsGNTP %in% c("PP1_WT", "PP2_WT", "MLP1_KO", "MLP2_KO", "ML_KO")),  features = genes_separate, group.by = "clusters") + RotatedAxis() + scale_colour_gradient2(low = "blue", mid = "white", high = "red")
+
+fig4m
+
+svglite::svglite("Figs/Fig4m_dotplot_markers_separate.svg", width = 8, height = 2.7, pointsize = 7, fix_text_size = F)
+fig4m
+dev.off()
+```
+
+Figure 4n - plot liver score split by genotypes
+
+```{r fig.width=12}
+DefaultAssay(gpx2.sc.d21.nP) <- "escape.GTX"
+
+fig4n_liver_feat <- FeaturePlot_scCustom(gpx2.sc.d21.nP, split.by = "Genotype", features = "liver", colors_use = viridis_light_high, order = T, label = F, na_cutoff = 0.0, na_color = "lightgray", pt.size = 1.5,  alpha_exp = 0.9)
+
+colors = dittoSeq::dittoColors()[1:20]
+fig4n_liver_vln <- VlnPlot(gpx2.sc.d21.nP, features = "liver", cols = colors, group.by = "Genotype", pt.size = 0)
+
+cowplot::plot_grid(fig4n_liver_feat, fig4n_liver_vln, ncol = 2, rel_widths = c(5,1))
+
+DefaultAssay(gpx2.sc.d21.nP) <- "RNA"
+
+svglite::svglite("Figs/Fig4n_liver.svg", width = 9, height = 3, pointsize = 7, fix_text_size = F)
+cowplot::plot_grid(fig4n_liver_feat, fig4n_liver_vln, ncol = 2, rel_widths = c(5,2))
+dev.off()
+```
+
+
+Figure 6c - dotplot ECM-related genes vs genotypes
+```{r}
+genes <- c("FN1", "COL14A1", "LAMA1", "LAMB1", "VCAN", "VTN", "CDH1", "CDH2", "GPC3") 
+
+fig6c <- dittoSeq::dittoDotPlot(gpx2.sc.d21.nP, vars = genes, assay = "RNA", group.by = "Genotype", scale = F, min.color = "blue", max.color = "red", mid.color = "grey90", summary.fxn.size = function(x) {100*mean(x != 0)}) 
+
+fig6c
+
+
+svglite::svglite("Figs/Fig6c_dotplot_clXgntp_ECM_genes_d21.svg", width = 5, height = 4, pointsize = 12, fix_text_size = F)
+fig6c
+dev.off()
+```
+
+Figure 6d - feature and violin plot LAMA1 day 21 split by Genotype
+```{r fig.width = 5}
+Fig6d <- FeaturePlot(gpx2.sc.d21.nP, features = "LAMA1", split.by = "Genotype", pt.size = 1.5, order = T) + theme(legend.position = "right")
+Fig6d
+
+Fig6d_r <- dittoSeq::multi_dittoPlot(object = gpx2.sc.d21.nP, assay = "RNA", slot = "data", var = "LAMA1", group.by = "Genotype", plots = c("vlnplot", "jitter"), nrow = 1, ncol = NULL, do.raster = T)
+Fig6d_r
+
+
+svglite::svglite("Figs/Fig6d_featplot_LAMA1_genotypes.svg", width = 7.5, height = 4, pointsize = 10, fix_text_size = F)
+Fig6d
+dev.off()
+svglite::svglite("Figs/Fig6d_vln_LAMA1_genotypes.svg", width = 4, height = 4, pointsize = 10, fix_text_size = F)
+plot(Fig6d_r)
+dev.off()
+
+```
+
+Figure 6e - ECM pathways at day 21
+```{r fig.width=12}
+DefaultAssay(gpx2.sc.d21.nP) <- "escape.pathways_normalized"
+
+fig6e_matri_feat <- FeaturePlot_scCustom(gpx2.sc.d21.nP, split.by = "Genotype", features = "NABA-CORE-MATRISOME", colors_use = viridis_light_high, order = T, label = F, na_cutoff = 0.0, na_color = "lightgray", pt.size = 1.5,  alpha_exp = 0.9)
+
+fig6e_matri_vln <- dittoSeq::dittoPlot(gpx2.sc.d21.nP, var = "NABA-CORE-MATRISOME", group.by = "Genotype", min = 0, max = NA, legend.show = F, do.raster = T, main = NULL, ylab = NULL)
+
+cowplot::plot_grid(fig6e_matri_feat, fig6e_matri_vln, ncol = 2, rel_widths = c(5,1))
+
+DefaultAssay(gpx2.sc.d21.nP) <- "RNA"
+
+svglite::svglite("Figs/Fig6e_ECM_scores.svg", width = 9, height = 2.7, pointsize = 7, fix_text_size = F)
+cowplot::plot_grid(fig6e_matri_feat, fig6e_matri_vln, ncol = 2, rel_widths = c(5,1))
+dev.off()
+
+
+```
+
+Figure 7b - PROGENy pathway regulons
+```{r}
+DE.d21.dR.PROGENy.Cl <- read.csv("SupplData3_3.csv")
+
+#pathways_heatmap function from functions.Rmd
+fig7d <- pathways_heatmap(SO = gpx2.sc.d21.nP, assay = "dR.PROGENy", group.by = "clusters", DEG = subset(DE.d21.dR.PROGENy.Cl, subset = !feature %in% c('Trail', 'Estrogen', 'Androgen', 'VEGF')), DEG.groups = "cluster", top = 10, label = "PROGENy pathway regulons", cluster_cols = T, direction = "both", fc.thr = 0.1, padj.thr = 0.05)
+
+fig7d
+
+svglite::svglite("Figs/Fig7d_d21_heatmap_PROGENy_genotype.svg", width = 5, height = 4, pointsize = 12, fix_text_size = F)
+fig7d
+dev.off()
+```
+
+
+Figure 7c - TGFb regulon feature plot and violin plots
+```{r fig.width=12}
+DefaultAssay(gpx2.sc.d21.nP) <- "dR.PROGENy"
+
+Fig7c_matri_feat <- FeaturePlot_scCustom(gpx2.sc.d21.nP, split.by = "Genotype", features = "TGFb", colors_use = viridis_light_high, order = T, label = F, na_cutoff = 0.0, na_color = "lightgray", pt.size = 1.5,  alpha_exp = 0.9)
+Fig7c_matri_vln <- dittoSeq::dittoPlot(gpx2.sc.d21.nP, var = "TGFb", group.by = "Genotype", min = NA, max = NA, legend.show = F, do.raster = T, main = NULL, ylab = NULL)
+
+cowplot::plot_grid(Fig7c_matri_feat, Fig7c_matri_vln, ncol = 2, rel_widths = c(5,1))
+
+DefaultAssay(gpx2.sc.d21.nP) <- "RNA"
+
+svglite::svglite("Figs/Fig7c_TGFb.svg", width = 7, height = 2.7, pointsize = 7, fix_text_size = F)
+cowplot::plot_grid(Fig7c_matri_feat, Fig7c_matri_vln, ncol = 2, rel_widths = c(5,1))
+dev.off()
+```
+
+
+Supplementary Figure 8a - SMAD regulons activity at day 21
+```{r}
+DE.d21.dR.CollecTRI.Cl <- read.csv("SupplData3_4.csv") 
+
+#pathways_heatmap function from functions.Rmd
+SMADs <- grep('SMAD', DE.d21.dR.CollecTRI.Cl$feature, value = TRUE) %>% unique()
+SMADs
+FigS8a <- pathways_heatmap(SO = gpx2.sc.d21.nP, assay = "dR.CollecTRI", group.by = "clusters", DEG = subset(DE.d21.dR.CollecTRI.Cl, subset = feature %in% SMADs), DEG.groups = "cluster", top = 5, label = "CollecTRI regulons for clusters", cluster_cols = T, direction = "both", fc.thr = 0.1, padj.thr = 0.05, rename = "-TARGET-GENES")
+
+FigS8a
+
+svglite::svglite("Figs/SupplFig8a_heatmap_clusters_CollecTRI-SMAD.svg", width = 5, height = 4, pointsize = 10, fix_text_size = F)
+FigS8A
+dev.off()
+```
+
+
+Supplementary Figure 8c - Feature plots for ATAC-Seq altered genes
+```{r fig.width=4, fig.height=15}
+figS8c <- FeaturePlot(gpx2.sc.d21.nP, features = c("BMP2", "SMAD3", "SMAD9", "ID1", "ID2", "ID3", "TGIF1", "TGIF2"), split.by = "Genotype")
+figS8c
+
+svglite::svglite("Figs/SupplFig8c_general_FeaturePlot_markers.svg", width = 15, height = 5, pointsize = 10, fix_text_size = F)
+figS8c
+dev.off()
+
+```
