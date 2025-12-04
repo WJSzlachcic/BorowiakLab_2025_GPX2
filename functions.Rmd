@@ -1,0 +1,199 @@
+---
+title: "Functions"
+output: html_notebook
+---
+
+
+dittoBarPlot_norm - normalize dittoBarPlot by cell number per group
+```{r}
+#Arguments:
+#SO - object variable of dittoBarPlot
+#var - var variable of dittoBarPlot
+#group.by - group.by variable of dittoBarPlot
+
+dittoBarPlot_norm <- function(SO, var, group.by, var.labels.reorder = NULL, x.reorder = NULL) {
+ ditt <- dittoSeq::dittoBarPlot(
+    object = SO,
+    var = var,
+    group.by = group.by,
+    data.out = TRUE, 
+    var.labels.reorder = var.labels.reorder,
+    x.reorder = x.reorder,
+    main = "Genotype - not normalized")
+plot1 <- ditt[1]
+print(plot1)
+#Extract and modify data.table - divide by proportion of cells within each genotype per all cells
+Gntp_per_cluster_norm <- as.data.frame(ditt[2])
+rm(ditt)
+#for each genotype count normalization factor (ncells_genotype/ncells_all); retrieve ncells per genotype from
+ncells_tbl <- as.data.frame(table(SO[[var]])) %>% mutate(total = ncol(SO))
+colnames(ncells_tbl) <- c("data.label", "ncells", "total")
+Gntp_per_cluster_norm <- Gntp_per_cluster_norm %>%
+  left_join(ncells_tbl) %>%
+  mutate(normalized.data.count = data.count*total/ncells) %>%
+  group_by(data.grouping) %>%
+  mutate(normalized.grouping.count = sum(normalized.data.count)) %>%
+  ungroup() %>%
+  mutate(normalized.data.percent = normalized.data.count/normalized.grouping.count) %>%
+  select(data.label, data.grouping, normalized.data.percent)
+#palette = dittoSeq::dittoColors()[1:5]
+plot2 <- ggplot(Gntp_per_cluster_norm, aes(fill=data.label, y=normalized.data.percent, x=data.grouping)) +
+    geom_bar(position="fill", stat="identity") + theme_classic() + scale_fill_hue(name = paste(var)) + labs(x = paste(group.by), y = "Percent of cells", title = paste(var, "- normalized"))
+print(plot2)
+return(list(plot1, plot2, Gntp_per_cluster_norm))
+}
+  
+```
+
+pathways_heatmap - plot top features from pathway analysis (decoupleR/escape) data as a heatmap
+```{r}
+#Arguments:
+#SO - Seurat object to use
+#assay - assay with stored pathway analysis to use, e.g. dR.PROGENY or dR.CollecTRI; default is NULL, which takes current DefaultAssay of the SO
+#layer - which layer of the assay to use for analysis, default is "data"
+#group.by - metadata by which to group.by, e.g. "seurat_clusters"
+#subset - how is SO to be subsetted, use as with 'subset' option of the subset() function; deafult is NULL (= no subsetting)
+#subset.gr - meta.data in which to search for the 'subset' values
+#invert - as in the subset() function, by default = FALSE;
+#DEG - DEG list; This list can be subsetted using subset() when specyfing DEG (this is separate from above within-function options: 'subset', 'subset.gr' amd 'invert' which allow to subset SO)
+#DEG.groups - column for which grouping
+#top - how many top regulons to plot per row (i.e. per group.by feature)
+#label - name of database (for heatmap title), e.g. TF regulons
+#scale - how data on the heatmap should be scaled, as in pheatmap function; options: "row", "column" and "none"; "column" by default
+#cluster_rows - if rows should be clusters, 'FALSE' by default (so order is kept as in groups) 
+#cluster_cols - if rows should be clustered, 'FALSE' by default (so order is based on top values per group) 
+#rename - string to be removed from term names on a plot, e.g. for MSigDB Hallmark - "Hallmark-", NA by default
+#sort.by - which column to sort by, either "padj" or "log_fc"
+#direction - which direction of deregulation to show ('up', 'down', 'both'), 'up' by default
+#cells.fraction - threshold for fraction of cells expressing a marker
+#fc.thr, padj.thr - thresholds for DE to be plotted, defaults: fc.thr = 0.5, padj.thr = 0.05
+
+pathways_heatmap <- function(SO, assay = NULL, layer = "data", group.by, subset = NULL, subset.gr = NULL, invert = FALSE, DEG, DEG.groups, top, label, sort.by = "padj", scale = "column", cluster_rows = FALSE, cluster_cols = FALSE, rename = NA, direction = "up", cells.fraction = 0.3, fc.thr = 0.2, padj.thr = 0.05, fontsize = 10) { 
+
+  top_DE <- select_top_DE(DEG, DEG.groups, top, cells.fraction = cells.fraction, fc.thr = fc.thr, padj.thr = padj.thr, sort.by = sort.by, direction = direction)
+
+  DefaultAssay(SO) <- assay
+  if(!is.null(subset)){
+    gb.subset.gr <- sym(subset.gr)
+    SO <- subset(SO, subset = !!gb.subset.gr %in% subset, invert = invert)}
+    
+  
+  mtx <- top_features_matrix(SO, layer, group.by , top_DE[[2]])
+
+  if(!is.na(rename)){
+    colnames(mtx) = gsub(rename,"", colnames(mtx))
+  }
+    
+# Choose color palette
+palette_length = 100
+my_color = colorRampPalette(c("darkblue", "grey99","red"))(palette_length)
+
+# Plot
+plot <- pheatmap::pheatmap(mtx, scale = scale, border_color = NA, color=my_color, breaks = NA, cluster_rows = cluster_rows, cluster_cols = cluster_cols, main = ifelse(top == 0, paste(label), paste("Top", top, label, ifelse(direction == "both", paste("up and down"), paste(direction)))), fontsize = fontsize)
+
+return(plot)
+ 
+}
+ 
+```
+
+
+######
+HELPER FUNCTIONS
+######
+
+select_top_DE - sorting DEG table for top markers (upregulated, downregulated or both)
+
+```{r}
+#DEG - DEG list; this list can be subsetted using subset() 
+#DEG.groups - column for which grouping
+#top - how many top regulons to plot per row (i.e. per group.by feature)
+#sort.by - which column to sort by, either "padj" or "log_fc"
+#direction - which direction of deregulation to show ('up', 'down', 'both'), 'up' by default
+#cells.fraction - threshold for fraction of cells expressing a marker
+#fc.thr, padj.thr - thresholds for DE to be plotted, defaults: fc.thr = 0.5, padj.thr = 0.05
+
+select_top_DE <- function(DEG, DEG.groups, top, cells.fraction = 0.3, sort.by, direction = "up", fc.thr = 0.5, padj.thr = 0.05){
+  DEG <- DEG %>% mutate(dir = case_when(
+    log_fc > 0 ~ "UP",
+    log_fc < 0 ~ "DOWN"))
+    #,
+    #TRUE ~ NA_character_))
+  library(rlang)
+  gb.deg <- sym(DEG.groups)
+  
+  if(!(sort.by %in% c("padj", "log_fc"))){stop("Invalid 'sort.by' argument. Must be 'padj' or 'log_fc'.")}
+  
+  DEG <- DEG %>%
+    filter((rate1 + rate2) > cells.fraction) %>%
+    filter(abs(log_fc) >= fc.thr) %>%
+    filter(padj <= padj.thr)
+  
+  if(sort.by == "log_fc"){
+    top_markers <- DEG %>%
+    group_by(!!gb.deg, dir) %>%
+    mutate(rank = row_number(-abs(get(sort.by)))) %>%
+    ungroup()
+    }
+  else{top_markers <- DEG %>%
+    group_by(!!gb.deg, dir) %>%
+    mutate(rank = row_number(get(sort.by))) %>%
+    ungroup()
+    }
+  
+  if(nrow(top_markers) <1){stop("No DEG genes found. Try releasing 'fc.thr', 'padj.thr' or 'cells.fraction' thresholds")}
+
+  if((direction == "both") & (nrow(top_markers) < 2*top)){print("Notice less DEGs found than 'top' value. Try releasing 'fc.thr', 'padj.thr' or 'cells.fraction' thresholds")}
+  if((direction != "both") & (nrow(top_markers) < top)){print("Notice less DEGs found than 'top' value. Try releasing 'fc.thr', 'padj.thr' or 'cells.fraction' thresholds")}
+  
+  top_markers <- top_markers %>%
+    slice_min(order_by = rank, by = c(!!gb.deg, dir), n = 3*top) %>%
+    distinct(feature, .keep_all = TRUE) %>%
+    slice_min(order_by = rank, by = c(!!gb.deg, dir), n = top)
+  
+  ifelse(direction %in% c("up", "down", "both"),
+  
+  top_markers <- top_markers %>% filter(case_when(
+    direction == "up" ~ dir == "UP",
+    direction == "down" ~ dir == "DOWN",
+    direction == "both" ~ dir %in% c("UP", "DOWN")) 
+  ), stop("Invalid 'dir' argument. Must be 'up', 'down', or 'both'."))
+  
+  top_markers_names <- top_markers %>% pull(feature)
+
+  return(list(top_markers, top_markers_names))
+}
+```
+
+
+top_features_matrix - extract top features from an SO assay (genes or regulon/pathway assays created from decoupleR/escape analysis)
+
+
+```{r}
+top_features_matrix <- function(SO, layer, group.by, top) { 
+  library(rlang)
+  gb.group <- sym(group.by)
+  
+  groups <- FetchData(SO, vars = group.by) %>% dplyr::rename(cluster = !!gb.group) %>% tibble::rownames_to_column (var = "id")
+  
+  mtx <- t(as.matrix(GetAssayData(object = SO, layer = layer))) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column (var = "id") %>%
+  left_join(groups) %>%  
+  tibble::column_to_rownames (var = "id") %>%
+  tidyr::pivot_longer(cols = -cluster, names_to = "source", values_to = "score") %>%
+  group_by(cluster, source) %>%
+  dplyr::summarise(mean = mean(score)) %>% 
+  filter(source %in% top) %>%
+  tidyr::pivot_wider(id_cols = 'cluster', names_from = 'source',
+              values_from = 'mean')
+  
+  mtx <-  mtx[,c("cluster",top)] %>%
+  tibble::column_to_rownames('cluster') %>%
+  as.matrix()
+
+return(mtx)
+}
+```
+
+
