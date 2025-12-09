@@ -1,0 +1,41 @@
+---
+title: "Scripts for figures from mouse e14.5 embryo scRNA-seq data"
+
+
+##script for data processing and analyzes are in "processing_me.Rmd" file, all home-made functions are in the "functions.Rmd"
+---
+
+LIBRARIES
+```{r}
+library(Seurat)
+```
+
+
+#### ------------------------------
+#### -----mouse e14.5 pancreas-----
+#### ------------------------------
+
+original data from: GSM2689399 (https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSM2689399) 
+
+load SO
+```{r}
+e14_panc <- readRDS("e14_panc.RDS")
+```
+
+Figure 1f
+```{r}
+subset_e14 <- subset(e14_panc, subset = clusters_new %in% c("acinar", "BP", "alpha", "EP-Fev", "EP-Ngn3", "beta"))
+
+order <- c("BP", "EP-Ngn3", "EP-Fev", "alpha", "beta", "acinar")
+Idents(subset_e14) <- factor(Idents(subset_e14), levels = order)                     
+                     
+FeaturePlot(object = subset_e14, features = 'Gpx2')
+
+Fig1f <- VlnPlot(subset_e14, features = "Gpx2", assay = "RNA", layer = "data", pt.size = 0)
+Fig1f
+
+svglite::svglite("figures/Fig1f.svg", width = 4, height = 2.5, pointsize = 12)
+Fig1f
+dev.off()
+```
+
