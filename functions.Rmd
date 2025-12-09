@@ -4,8 +4,10 @@ output: html_notebook
 ---
 
 
-dittoBarPlot_norm - normalize dittoBarPlot by cell number per group
+dittoBarPlot_norm
 ```{r}
+#a function for plotting a dittoBarPlot with data normalized by cell number per group
+
 #Arguments:
 #SO - object variable of dittoBarPlot
 #var - var variable of dittoBarPlot
@@ -45,8 +47,61 @@ return(list(plot1, plot2, Gntp_per_cluster_norm))
   
 ```
 
-pathways_heatmap - plot top features from pathway analysis (decoupleR/escape) data as a heatmap
+plot_top_DE
 ```{r}
+#a function for plotting top genes from a DE analysis
+
+#Arguments:
+#SO - Seurat object, can be filtered using subset() function in the formula
+#DEG - DEG table
+#DEG.groups - column for which grouping
+#top - how many genes per group
+#sort.by - which column to sort by
+#direction - direction of DEG regulation to be selected & plotted - can be "up", "down" or "both". "up" by default.
+#group.by - Seurat meta.data to group by; takes Idents() if set to NUL
+#scale -	Determine whether the data is scaled, TRUE for default
+#deg.method - DEG method used to create DEG table, "delegate" by default, change to "findall" for Seurat's FindAllMArkers
+#min, max/mid/min.color - from dittoSeq::dittoDotPlot
+#cells.fraction - fraction of cells in both groups with detected expression of a gene 0.3 by default
+#fc.thr, padj.thr - thresholds for log_fc (= 1 by default) and p_adj (=0.01 by default)
+#type - type of input ("module", "term") from which DEGs are taken, if NULL input is considered as a gene
+
+plot_top_DE <- function(SO, DEG, DEG.groups, top, sort.by, direction = "up", group.by, scale = TRUE, deg.method = "delegate", min = "make", fc.thr = 0.5, padj.thr = 0.05, cells.fraction = 0.3, type = NULL, term = NULL, assay = "SCT"){
+    if(deg.method == "findall"){
+    DEG <- DEG %>% dplyr::rename(padj = p_val_adj, log_fc = avg_log2FC, feature = gene, rate1 = pct.1, rate2 = pct.2)
+  }
+  top_m <- select_top_DE(DEG = DEG, DEG.groups = DEG.groups, top = top, cells.fraction = cells.fraction, sort.by = sort.by, direction = direction, fc.thr = fc.thr, padj.thr = padj.thr)
+  
+    #if single value only uses Seurat::DotPlot, otherwise uses dittoDotPlot
+  if(length(top_m[[2]]) == 1) {top_plot <- DotPlot(SO, features = top_m[[2]], assay = assay, group.by = group.by, scale = scale) + RotatedAxis() + scale_colour_gradient2(low = "blue", mid = "grey95", high = "red") 
+  }
+  else {top_plot <- dittoSeq::dittoDotPlot(SO, vars = top_m[[2]], assay = assay, group.by = group.by, scale = scale, min.color = "blue", max.color = "red", mid.color = "grey90", min = min, summary.fxn.size = function(x) {100*mean(x != 0)} ) 
+  
+  #Plot title depending on input type
+  if(is.null(type)){
+    top_plot <- top_plot + ggtitle(paste("Top", top, "DEGs",  ifelse(direction == "both", "up and down", direction)))
+  }
+  else{
+    if(type == "module"){
+    top_plot <- top_plot + ggtitle(paste("Top", top, "DEGs",  ifelse(direction == "both", "up and down", direction), "from module", term))
+  }
+  
+  if(type == "term"){
+    top_plot <- top_plot + ggtitle(paste("Top", top, "DEGs",  ifelse(direction == "both", "up and down", direction), "from", term, "pathway"))
+  }
+  }
+  
+  return(list(top_m, top_plot))
+
+}
+```
+
+
+pathways_heatmap
+```{r}
+#a function for plotting top features from pathway analysis (decoupleR/escape) data as a heatmap
+
+
 #Arguments:
 #SO - Seurat object to use
 #assay - assay with stored pathway analysis to use, e.g. dR.PROGENY or dR.CollecTRI; default is NULL, which takes current DefaultAssay of the SO
@@ -98,13 +153,105 @@ return(plot)
 ```
 
 
+find_pseudotime_delta 
+
+```{r}
+#a function for finding differentially behaving genes/pathways/regulons/modules along two chosen pseudotime trajectories and plotting them. It can be also used to plot specific terms (set.y).  
+
+#Arguments:
+#SO - Seurat object
+#set.type - type of features to be plotted; 'meta' for meta.data (e.g. modules), 'feat' for genes or rownames from other assays (e.g. decoupleR)
+#trajectory - meta.data in which trajectory information is stored, "trajectory" by default; if NULL, then 
+#incl.common - to choose if cells common for both trajectories should be used (FALSE by default) 
+#assay - assay to be used - use "SCT" for genes and other for specific decoupleR term (e.g. dR.PROGENy); 'SCT' by default.
+#meta.x - name of meta.data level plotted on x axis (e.g. pseudotime)
+#set.y - names of single/multiple meta.data OR features plotted on y axis; will search for a string: for meta.data starting with set.y name, for features based on regex expression, e.g. "^ETV"; can use vector of characters (e.g. c("MAPK", "Hypoxia", "WNT")); 
+#group1, group2 - names of trajectories you want to be plotted
+#top - how many terms to plot (these are top by AUC difference if arrange = T; or in order given if arrange = F)
+#arrange - if plots are to be arranged by AUC difference; TRUE by default
+#filter.auc - to filter by absolute AUC values, FALSE by default; inserting number will filter so at least one trajectory has higher abs value than input
+
+find_pseudotime_delta <- function(SO, trajectory = "trajectory", incl.common = F, set.type = "meta", assay = "RNA", meta.x = "pseudotime", set.y, group1, group2, top, arrange = TRUE, filter.auc = F){
+  
+  #pull names of trajectories
+  
+  if(rlang::is_false(incl.common)){
+    names <- SO[[trajectory]] %>% 
+      filter(trajectory != "not-in-trajectory") %>% 
+      filter(trajectory != "common") %>% 
+      arrange(trajectory) %>% 
+      pull(trajectory) %>% 
+      unique()
+    print(names)
+    }
+  else{
+      names <- SO[[trajectory]] %>% filter(trajectory != "not-in-trajectory") %>% arrange(trajectory) %>% pull(trajectory) %>% unique()
+      print(names)
+    }
+    
+  #subset SO to only cells within trajectories
+  sym.tr <- sym(trajectory)
+  sbst <- subset(SO, subset = !!sym.tr %in% names)
+
+  ##prepare input - features to check
+  trajectory.terms <- vector(mode='list', length=2)
+  for(i in 1:2) {
+   if(rlang::is_false(incl.common)) {
+     SO.trajectory <- subset(sbst, subset = !!sym.tr == names[[i]])
+   }
+   else{
+     SO.trajectory <- subset(sbst, subset = !!sym.tr %in% c(names[[1]], names[[i+1]]))
+   }
+   trajectory.terms[[i]] <- multi_terms_df(SO = SO.trajectory, set.type = set.type, assay = assay, meta.x = meta.x, set.y = set.y) %>% arrange(.[2]) #arrange necessary for AUC function
+  }
+  names(trajectory.terms)[1] <- group1
+  names(trajectory.terms)[2] <- group2
+
+  ## Calculate AUC (area under curve) and delta between groups for each term
+  df.AUC <- table_auc(input = trajectory.terms)
+  
+  #filtering by absolute calculated AUC values
+  if(!rlang::is_false(filter.auc)){
+    df.AUC <- df.AUC %>% filter((abs(group1) >= filter.auc)|(abs(group2) >= filter.auc))
+  }
+  
+  ##select top differential curves  
+    if(rlang::is_true(arrange)){
+  top.AUC <- df.AUC %>% arrange(-abs(delta)) %>% slice_head(n = top) %>% pull(1) 
+  }
+  else{top.AUC <- df.AUC %>% slice_head(n = top) %>% pull(1)}
+  
+  ##filter terms in trajectory.terms
+  tbl.top <- trajectory.terms %>% 
+    bind_rows(.id = "trajectory") %>%
+    select(c(1:3, any_of(top.AUC))) 
+
+  ##plot them
+    #create list of plots
+    ggList <- list()
+    for (i in 4:length(tbl.top)){
+    ggList[[i-3]] <- plot_cont_meta_cond(tbl.top, i, group1, group2) 
+    }
+    #return ggplot list
+    if(length(tbl.top) < 6){ncol = length(tbl.top)-3 }
+    if(length(tbl.top) > 5){ncol = 3 }
+    plot_multi <- cowplot::plot_grid(plotlist=ggList, ncol = ncol)
+
+ return(list(df.AUC, tbl.top, plot_multi))  
+}
+```
+
+
 ######
 HELPER FUNCTIONS
 ######
 
-select_top_DE - sorting DEG table for top markers (upregulated, downregulated or both)
+select_top_DE
 
 ```{r}
+#a helper function for sorting DEG table for top markers (upregulated, downregulated or both)
+
+#Arguments:
 #DEG - DEG list; this list can be subsetted using subset() 
 #DEG.groups - column for which grouping
 #top - how many top regulons to plot per row (i.e. per group.by feature)
@@ -166,10 +313,10 @@ select_top_DE <- function(DEG, DEG.groups, top, cells.fraction = 0.3, sort.by, d
 ```
 
 
-top_features_matrix - extract top features from an SO assay (genes or regulon/pathway assays created from decoupleR/escape analysis)
-
-
+top_features_matrix
 ```{r}
+#a helper function for extracting top features from an SO assay (genes or regulon/pathway assays created from decoupleR/escape analysis)
+
 top_features_matrix <- function(SO, layer, group.by, top) { 
   library(rlang)
   gb.group <- sym(group.by)
@@ -196,4 +343,104 @@ return(mtx)
 }
 ```
 
+multi_terms_df
+```{r}
+#a helper function for extracting features from SO for plotting
 
+multi_terms_df <- function(SO, set.type, y.type = "cont", assay = "SCT", meta.x, set.y){
+  DefaultAssay(object = SO) <- assay
+  if(set.type == "feat") {
+    #create vector of feature names found in SO
+    lst0 <- rownames(SO)
+    lst <- NULL
+    for(i in 1:length(set.y)){
+    lst <- lst %>% 
+      append(lst0[grepl(paste0(set.y[i]), lst0)]) %>%
+      unique()
+    }
+    #extract feature names from SO
+   set.tbl <- FetchData(SO, vars = lst, layer = "data") %>% #always using data slot!!
+            tibble::rownames_to_column()
+
+  }
+  if(set.type == "meta"){ 
+    set.tbl0 <- SO[[]] 
+    set.tbl <- set.tbl0 %>% 
+          select(contains(set.y)) %>%
+          tibble::rownames_to_column()
+    if(length(set.y) > 1){
+      for(i in 2:length(set.y)){
+        set.tbl.i <- set.tbl0 %>% 
+          select(contains(set.y[i])) %>%
+          tibble::rownames_to_column()
+        set.tbl <- set.tbl %>% left_join(set.tbl.i)
+      }
+    }
+  }
+  
+  if(!(set.type %in% c("feat", "meta"))) {stop("Feature set type not recognized. Allowed options: 'features' - for genes, decoupleR, and 'meta' - for numeric meta.data")}
+  
+  tbl <- SO[[meta.x]] %>% 
+  tibble::rownames_to_column() %>%
+  left_join(set.tbl)
+  
+  #remove cells with Inf pseudotime - usually cells from different partitions
+  if(meta.x %in% "pseudotime"){
+    tbl <- tbl %>% filter(pseudotime != 'Inf')}
+  
+  return(tbl)
+}
+```
+
+plot_cont_meta_cond
+```{r}
+#a helper function for plotting continous data split by conditions
+
+
+plot_cont_meta_cond <- function(tbl.top,i,group1, group2){
+  x <- sym(names(tbl.top)[3])
+  y <- sym(names(tbl.top)[i])
+  
+     g1 <- filter(tbl.top, trajectory == group1)
+     g2 <- filter(tbl.top, trajectory == group2)
+
+    ggplot(data = tbl.top, aes(x = !!x, y = !!y, color = trajectory)) +
+    geom_smooth(data = g1, method = "gam", formula = y ~ s(x, bs = "cs")) + 
+    geom_smooth(data = g2, method = "gam", formula = y ~ s(x, bs = "cs")) + 
+    theme_classic()
+}
+```
+
+table_auc
+```{r}
+#a helper function for creating data table with AUC and delta-AUC for each term
+
+table_auc <- function(input) {
+   #empty table for storing data
+    df <- data.table(term = character(), group1 = numeric(), group2 = numeric())
+  #calculate AUC
+    for(i in 3:length(input[[1]])){
+      output <- calculate_auc(input, i)
+      df <- rbind(df, output)
+    }
+    #calculate delta-AUC for each term
+    df <- df %>% mutate(delta = group1 - group2)   
+    return(df)
+}
+```
+
+calculate_auc
+```{r}
+#a helper function to calculate AUC (area under curve) using trapezoidal method
+
+   calculate_auc <- function(input, i){
+     output <- data.table(term = character(), group1 = numeric(), group2 = numeric())
+     output[[1, 1]] <- colnames(input[[1]][i])
+     for(j in 1:2){
+      n <- length(input[[j]][[i]])
+      output[[1, j+1]] <- sum(diff(input[[j]][[2]]) * (input[[j]][[i]][-1] + input[[j]][[i]][-n]) / 2)
+     }
+     return(output)
+   }
+
+```
