@@ -1,0 +1,89 @@
+---
+title: "Scripts for figures from human fetal scRNA-seq datasets"
+
+
+##script for data processing and analyzes are in "processing_hf.Rmd" file, all home-made functions are in the "functions.Rmd"
+---
+
+LIBRARIES
+```{r}
+library(dplyr)
+library(tidyr)
+library(Seurat)
+library(ggplot2)
+library(svglite)
+library(dittoSeq)
+library(scCustomize)
+library(cowplot)
+```
+
+
+#### -----------------------------
+#### ---human PCW 4-11 pancreas---
+#### -----------------------------
+
+original data from: OMIX001616 (https://ngdc.cncb.ac.cn/omix/release/OMIX001616) 
+
+```{r}
+#read SO 
+gpx2.sc.pcw4to11 <- readRDS("gpx2_sc_pcw4to11.RDS")
+```
+
+Supplementary Figure 1c - violin plot oxidative stress
+```{r}
+DefaultAssay(object = gpx2.sc.pcw4to11) <- "enrichr.wikipathways_normalized"
+feat <- c('Oxidative Stress Response WP408')
+FigS1c <- VlnPlot(gpx2.sc.pcw4to11, cols = dittoSeq::dittoColors(), pt.size = 0, group.by = "PCW", features = feat, raster = T, y.max = 0.000075) 
+DefaultAssay(object = gpx2.sc.pcw4to11) <- "SCT"
+
+svglite::svglite("figures/SupplFig1c_human_PCW4-11_OxidativeStress.svg", width = 5.5, height = 3.5, pointsize = 10, fix_text_size = F) 
+FigS1c 
+dev.off()
+```
+
+#### -----------------------------
+#### ---human PCW 4-14 pancreas---
+#### -----------------------------
+
+original data from: 
+- [PCW4-11] OMIX001616 (https://ngdc.cncb.ac.cn/omix/release/OMIX001616) 
+- [PCW12-20] GSE197064 (https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE197064) 
+
+```{r}
+#read SO 
+gpx2.sc.pcw4to14 <- readRDS("gpx2_sc_pcw4to14.RDS")
+```
+
+Figure 1h - dotplot of GPX2 expression
+```{r}
+Fig1h <- DotPlot(gpx2.sc.pcw4to14, features = c("GPX2"), assay = "SCT") + RotatedAxis() + coord_flip() 
+Fig1h
+
+svglite::svglite("figures/Fig1h_GPX2_human_PCW4-14.svg", width = 5.5, height = 1.5, pointsize = 10, fix_text_size = F) 
+Fig1h 
+dev.off()
+```
+
+
+#### -----------------------------
+#### ------human PCW 5-6 liver----
+#### -----------------------------
+
+original data from: 
+- [PCW5] E-MTAB-8210 (https://www.ebi.ac.uk/biostudies/arrayexpress/studies/E-MTAB-8210) 
+- [PCW6] E-MTAB-7189 (https://www.ebi.ac.uk/biostudies/arrayexpress/studies/E-MTAB-71899
+
+```{r}
+#read SO - data integrated using STACAS
+gpx2.sc.liver <- readRDS("gpx2_sc_liver.RDS")
+```
+
+Supplementary Figure 6h
+```{r}
+#dotplot from data subset of PCW5-6
+FigS6h <- DotPlot(subset(gpx2.sc.liver, subset = time %in% c("5", "6")), features = redox, group.by = "cell_type") + RotatedAxis() + scale_colour_gradient2(low = "blue", mid = "white", high = "red")
+
+svglite::svglite("figures/FigS6h.svg", width = 10, height = 3, pointsize = 10, fix_text_size = F) 
+FigS6h
+dev.off()
+```
