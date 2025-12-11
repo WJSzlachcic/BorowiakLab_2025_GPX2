@@ -1,0 +1,109 @@
+---
+title: "Scripts for figures from day 8 spontaneous hPSC differentiation"
+---
+
+
+
+LIBRARIES
+```{r}
+library(DESeq2)
+library(dplyr)
+library(ggplot2)
+library(decoupleR)
+```
+
+
+### ---------------
+### ---FUNCTIONS---
+### ---------------
+
+plot_dcplr_DEPs
+
+function to create barplot from decoupleR DEP analysis between two genotypes; 
+based on https://saezlab.github.io/decoupleR/articles/tf_bk.html
+
+```{r}
+
+plot_dcplr_DEPs <- function(dcplr_tbl, n_pthwys = 30, term = NULL, net = NULL, xlabel = "TFs"){
+# Filter top TFs in both signs
+f_contrast_acts <- dcplr_tbl %>%
+                   dplyr::mutate(rnk = NA)
+
+msk <- f_contrast_acts$score > 0
+
+f_contrast_acts[msk, 'rnk'] <- rank(-f_contrast_acts[msk, 'score'])
+f_contrast_acts[!msk, 'rnk'] <- rank(-abs(f_contrast_acts[!msk, 'score']))
+
+if(is.null(term))
+{pthwys <- f_contrast_acts %>%
+       dplyr::arrange(rnk) %>%
+       head(n_pthwys) %>%
+       dplyr::pull(source)
+}
+else{
+  if(is.null(net)) {stop("Network - net - has to be given if term is to be selected")}
+  pthwys <- grep(term, net$source, value = TRUE) %>% unique()
+  print(pthwys)
+  }
+f_contrast_acts <- f_contrast_acts %>%
+                   filter(source %in% pthwys)
+
+colors <- rev(RColorBrewer::brewer.pal(n = 11, name = "RdBu")[c(2, 10)])
+
+p <- ggplot2::ggplot(data = f_contrast_acts, 
+                     mapping = ggplot2::aes(x = stats::reorder(source, score), 
+                                            y = score)) + 
+     ggplot2::geom_bar(mapping = ggplot2::aes(fill = score),
+                       color = "black",
+                       stat = "identity") +
+     ggplot2::scale_fill_gradient2(low = colors[1], 
+                                   mid = "whitesmoke", 
+                                   high = colors[2], 
+                                   midpoint = 0) + 
+     ggplot2::theme_minimal() +
+     ggplot2::theme(axis.title = element_text(face = "bold", size = 12),
+              axis.text.x = ggplot2::element_text(angle = 45, 
+                                                  hjust = 1, 
+                                                  size = 14, 
+                                                  face = "bold"),
+              axis.text.y = ggplot2::element_text(size = 10, 
+                                                  face = "bold"),
+              panel.grid.major = element_blank(), 
+              panel.grid.minor = element_blank()) +
+     ggplot2::xlab(xlabel)
+
+return(p)
+}
+```
+
+
+#### ---------------------------------------
+#### ---d8 spontanoeus DE differentiation---
+#### ---------------------------------------
+
+Supplementary Figures 7e-g - created using iDEP
+
+
+Supplementary Figure  7i - intestine-related DEGs
+
+Figure 6f - ECM-related DEGs
+
+Figure 7d - TGFb-related DEGs
+
+
+Supplementary Figure 7b - SMAD regulons
+```{r}
+SupplData4_4 <- read.csv("SupplData4_4.csv")
+
+#
+svglite::svglite("figures/SupplFig7b_SMADs_KOvsWT.svg", width = 3, height = 2, pointsize = 7, fix_text_size = F) 
+plot_dcplr_DEPs(SupplData4_4, term = "SMAD", net = net_collectri)
+dev.off()
+
+SupplData4_5 <- read.csv("SupplData4_5.csv")
+
+svglite::svglite("forFigs/SupplFig7b_SMADs_WTH2O2vsWT.svg", width = 3, height = 2, pointsize = 7, fix_text_size = F) 
+plot_dcplr_DEPs(SupplData4_5, term = "SMAD", net = net_collectri)
+dev.off()
+
+```
